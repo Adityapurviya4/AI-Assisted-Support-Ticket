@@ -67,8 +67,3 @@ This project automates that entire process using Python and AI (Claude API):
 | **Validation** | Python logic / `scikit-learn` | Measure model precision | Compares AI output vs. human tags to calculate overall accuracy. |
 | **Confidence Routing** | Python `if/else` logic | Safety net (Human-in-the-Loop) | Routes ambiguous or complex tickets directly to human agents. |
 
----
-
-### How to Explain This in an Interview
-
-> *"I built a Python pipeline using Pandas and the Claude API to streamline customer support operations. The system receives raw support text, categorizes it across four key issue types, and writes an initial draft response. To ensure reliability, I added an accuracy validation step against pre-labeled ground-truth data, as well as a confidence-based threshold system that routes low-confidence predictions to human agents for manual review."*
