@@ -135,3 +135,139 @@ Once deployed, the pipeline relies on the generated confidence score to route th
 * **Low Confidence:** The ticket is routed to a human agent's dashboard. The agent sees the AI's best guess and draft, but must manually approve, edit, or rewrite it before sending. This drastically cuts down typing time while ensuring quality control for ambiguous or frustrated user emails.
 
 
+/
+/
+//
+
+//
+/
+//
+/
+/
+/
+/
+
+/
+/
+/
+/
+/
+/
+/
+/
+/
+/
+
+/
+
+/
+/
+---
+
+## Technical Whiteboard Architecture Canvas
+
+The system architecture transforms raw, unstructured customer emails into structured database entities, confidence-scored predictions, and agent-ready response drafts through a deterministic, four-stage pipeline:
+
+```
+[ Inbound Support Ticket (CSV/Email) ]
+                 │
+                 ▼
+ ┌───────────────────────────────────────────────┐
+ │ Node 1: Pandas Data Ingestion & Preprocessing │
+ │  - Remove PII & Email Footers                 │
+ │  - Construct Structured DataFrame             │
+ └───────────────────────┬───────────────────────┘
+                         │
+                         ▼
+ ┌───────────────────────────────────────────────┐
+ │ Node 2: Claude API Zero-Shot Inference        │
+ │  - Prompt Engineering (System Prompt)         │
+ │  - Enforce Structured JSON Schema Output      │
+ └───────────────────────┬───────────────────────┘
+                         │
+        ┌────────────────┴────────────────┐
+        ▼                                 ▼
+ ┌───────────────┐               ┌─────────────────┐
+ │ Validation    │               │ Confidence      │
+ │ Matrix        │               │ Router          │
+ └───────┬───────┘               └────────┬────────┘
+         │                                │
+         ▼                                ▼
+[ Precision & Recall ]         ┌──────────────────┐
+[ Accuracy Checking  ]         │ Score Check      │
+                               └┬────────────────┬┘
+                       >= 85%   │                │  < 85%
+                                ▼                ▼
+                      ┌──────────────────┐  ┌──────────────────┐
+                      │ Agent Auto-Draft │  │ Human Triage Queue│
+                      │ 1-Click Send     │  │ Manual Review    │
+                      └──────────────────┘  └──────────────────┘
+
+```
+
+---
+
+---
+
+## Detailed System Design Canvas Specifications
+
+### Node 1: Data Ingestion & Preprocessing Canvas (`pandas`)
+
+This node normalizes unstructured support requests into structured DataFrames ready for API batch processing.
+
+* **Ingestion Schema:** Reads raw CSV/Excel data into a Pandas DataFrame with core schema: `Ticket_ID`, `Timestamp`, `Customer_Email`, `Customer_Message`, and `Ground_Truth_Category`.
+* **Text Preprocessing:**
+* Strips out regex signatures (e.g., `"Sent from my iPhone"`, email headers, legal disclaimers).
+* Masks Personally Identifiable Information (PII) like credit card numbers, phone numbers, and IP addresses.
+
+
+* **Batching Strategy:** Groups clean messages into configurable batches (e.g., 50 tickets per API call loop) to manage throughput and API rate limits.
+
+---
+
+### Node 2: Inference & JSON Schema Canvas (`anthropic` API)
+
+This node passes the cleaned text to Claude with a system prompt enforcing a strict JSON return payload.
+
+* **Prompt Construction:** Uses zero-shot classification guidelines specifying four immutable target categories (`Auth`, `Billing`, `Integration`, `Data`).
+* **JSON Response Constraint:** Forces the model to return raw JSON matching this schema:
+
+```json
+{
+  "predicted_category": "Auth",
+  "confidence_score": 0.94,
+  "reasoning_brief": "User mentions password reset loop and 403 authorization error.",
+  "draft_response": "Hi there,\n\nIt looks like you're experiencing a login loop. Please clear your browser cache or reset your password using the account recovery link...\n\nBest regards,\nSupport Team"
+}
+
+```
+
+---
+
+### Node 3: Validation & Accuracy Checking Canvas
+
+Before deploying to live support workflows, the model's accuracy is calculated against historical manually labeled tickets (`Ground_Truth_Category`).
+
+| Metric | Formula / Implementation | Goal Threshold | Purpose |
+| --- | --- | --- | --- |
+| **Accuracy** | $\frac{\text{Correct AI Predictions}}{\text{Total Validated Tickets}}$ | $\ge 90\%$ | Verifies overall system reliability across all ticket types. |
+| **Category Precision** | $\frac{\text{True Auth Positives}}{\text{True Auth Positives} + \text{False Auth Positives}}$ | $\ge 88\%$ | Ensures miscategorized tickets don't leak into the wrong support queues. |
+| **Recall** | $\frac{\text{True Auth Positives}}{\text{True Auth Positives} + \text{False Auth Negatives}}$ | $\ge 92\%$ | Guarantees critical customer issues aren't missed or dropped. |
+
+---
+
+### Node 4: Confidence-Based Routing Canvas (Human-in-the-Loop)
+
+A safety gate acts as a fallback to ensure uncertain AI predictions never harm customer relations.
+
+* **High Confidence Path ($\text{Score} \ge 85\%$):**
+* Ticket automatically tags as `Auth` / `Billing` / `Integration` / `Data`.
+* Draft response auto-populates directly inside the support agent's dashboard editor.
+* Agent performs a 1-click review and send, reducing ticket handle time by up to 70%.
+
+
+* **Low Confidence Path ($\text{Score} < 85\%$):**
+* Ticket routes directly to the **Manual Triage Queue**.
+* AI prediction and draft are hidden or marked with a warning flag.
+* Human agent categorizes and writes/edits response manually.
+* The manual correction is logged back into the training/validation set for continuous model optimization.
